@@ -874,7 +874,7 @@ const FontCacheEntry = struct {
         }
 
         FontCacheEntry.intToError(c.FT_Load_Char(self.face, codepoint, @as(i32, @bitCast(LoadFlags{ .render = false })))) catch |err| {
-            std.debug.print("glyphInfoGet: freetype error {!} font {s} codepoint {d}\n", .{ err, font_name, codepoint });
+            std.log.err("glyphInfoGet: freetype error {!} font {s} codepoint {d}", .{ err, font_name, codepoint });
             return error.freetypeError;
         };
 
@@ -916,13 +916,13 @@ pub fn fontCacheGet(font: Font) !*FontCacheEntry {
     args.memory_base = font.ttf_bytes.ptr;
     args.memory_size = @as(u31, @intCast(font.ttf_bytes.len));
     FontCacheEntry.intToError(c.FT_Open_Face(cw.ft2lib, &args, 0, &face)) catch |err| {
-        std.debug.print("fontCacheGet: freetype error {!} trying to FT_Open_Face font {s}\n", .{ err, font.name });
+        log.err("fontCacheGet: freetype error {!} trying to FT_Open_Face font {s}", .{ err, font.name });
         return error.freetypeError;
     };
 
     const pixel_size = @as(u32, @intFromFloat(font.size));
     FontCacheEntry.intToError(c.FT_Set_Pixel_Sizes(face, pixel_size, pixel_size)) catch |err| {
-        std.debug.print("fontCacheGet: freetype error {!} trying to FT_Set_Pixel_Sizes font {s}\n", .{ err, font.name });
+        log.err("fontCacheGet: freetype error {!} trying to FT_Set_Pixel_Sizes font {s}", .{ err, font.name });
         return error.freetypeError;
     };
 
@@ -968,7 +968,7 @@ pub fn iconWidth(name: []const u8, tvg_bytes: []const u8, height: f32) !f32 {
     if (height == 0) return 0.0;
     var stream = std.io.fixedBufferStream(tvg_bytes);
     var parser = tvg.parse(currentWindow().arena, stream.reader()) catch |err| {
-        std.debug.print("iconWidth: Tinyvg error {!} parsing icon {s}\n", .{ err, name });
+        log.err("iconWidth: Tinyvg error {!} parsing icon {s}", .{ err, name });
         return error.tvgError;
     };
     defer parser.deinit();
@@ -993,7 +993,7 @@ pub fn iconTexture(name: []const u8, tvg_bytes: []const u8, height: u32) !IconCa
         @as(tvg.rendering.AntiAliasing, @enumFromInt(2)),
         tvg_bytes,
     ) catch |err| {
-        std.debug.print("iconTexture: Tinyvg error {!} rendering icon {s} at height {d}\n", .{ err, name, height });
+        log.err("iconTexture: Tinyvg error {!} rendering icon {s} at height {d}", .{ err, name, height });
         return error.tvgError;
     };
     defer image.deinit(cw.arena);
@@ -1083,7 +1083,7 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
     for (items, 0..) |sw, i| {
         if (sw.id == subwindow_id) {
             if (sw.stay_above_parent != null) {
-                std.debug.print("raiseSubwindow: tried to raise a subwindow {x} with stay_above_parent set\n", .{subwindow_id});
+                log.warn("raiseSubwindow: tried to raise a subwindow {x} with stay_above_parent set", .{subwindow_id});
                 return;
             }
 
@@ -1108,7 +1108,7 @@ pub fn raiseSubwindow(subwindow_id: u32) void {
         }
     }
 
-    std.debug.print("raiseSubwindow: couldn't find subwindow {x}\n", .{subwindow_id});
+    log.err("raiseSubwindow: couldn't find subwindow {x}", .{subwindow_id});
     return;
 }
 
@@ -1560,7 +1560,7 @@ pub fn subwindowAdd(id: u32, rect: Rect, modal: bool, stay_above_parent: ?u32) !
             sw.stay_above_parent = stay_above_parent;
 
             if (sw.render_cmds.items.len > 0 or sw.render_cmds_after.items.len > 0) {
-                std.debug.print("dvui: subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)\n", .{id});
+                log.err("subwindowAdd {x} is clearing some drawing commands (did you try to draw between subwindowCurrentSet and subwindowAdd?)", .{id});
             }
 
             sw.render_cmds = std.ArrayList(RenderCmd).init(cw.arena);
@@ -1820,7 +1820,7 @@ pub fn minSizeSet(id: u32, s: Size) !void {
     var cw = currentWindow();
     if (try cw.min_sizes.fetchPut(id, .{ .size = s })) |ss| {
         if (ss.value.used) {
-            std.debug.print("dvui: id {x} was already used this frame (highlighting)\n", .{id});
+            log.warn("id {x} was already used this frame (highlighting)", .{id});
             cw.debug_widget_id = id;
         }
     }
@@ -2046,7 +2046,7 @@ pub fn animation(id: u32, key: []const u8, a: Animation) void {
     const h = hashIdKey(id, key);
     cw.animations.put(h, a) catch |err| switch (err) {
         error.OutOfMemory => {
-            std.debug.print("animation: got {!} for id {x} key {s}\n", .{ err, id, key });
+            log.err("animation: got {!} for id {x} key {s}", .{ err, id, key });
         },
     };
 }
@@ -2346,7 +2346,7 @@ pub const Window = struct {
         self.frame_time_ns = std.time.nanoTimestamp();
 
         FontCacheEntry.intToError(c.FT_Init_FreeType(&self.ft2lib)) catch |err| {
-            std.debug.print("init: freetype error {!} trying to init freetype library\n", .{err});
+            log.err("init: freetype error {!} trying to init freetype library", .{err});
             return error.freetypeError;
         };
 
@@ -2930,7 +2930,7 @@ pub const Window = struct {
     fn positionMouseEventRemove(self: *Self) void {
         const e = self.events.pop();
         if (e.evt != .mouse or e.evt.mouse.action != .position) {
-            std.debug.print("dvui: positionMouseEventRemove removed a non-mouse or non-position event\n", .{});
+            log.warn("positionMouseEventRemove removed a non-mouse or non-position event", .{});
         }
     }
 
@@ -2955,7 +2955,7 @@ pub const Window = struct {
             }
         }
 
-        std.debug.print("subwindowCurrent failed to find the current subwindow, returning base window\n", .{});
+        log.err("subwindowCurrent failed to find the current subwindow, returning base window", .{});
         return &self.subwindows.items[0];
     }
 
@@ -2968,7 +2968,7 @@ pub const Window = struct {
             }
         }
 
-        std.debug.print("subwindowFocused failed to find the current subwindow, returning base window\n", .{});
+        log.err("subwindowFocused failed to find the current subwindow, returning base window", .{});
         return &self.subwindows.items[0];
     }
 
@@ -3052,14 +3052,14 @@ pub const Window = struct {
                 std.mem.copy(u8, sd.data, bytes);
                 return;
             } else {
-                std.debug.print("dataSet: already had data for id {x} key {s}, freeing previous data\n", .{ id, key });
+                log.warn("dataSet: already had data for id {x} key {s}, freeing previous data", .{ id, key });
                 self.gpa.free(sd.data);
             }
         }
 
         var sd = SavedData{ .data = self.gpa.alloc(u8, bytes.len) catch |err| switch (err) {
             error.OutOfMemory => {
-                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                log.err("dataSet: got {!} for id {x} key {s}", .{ err, id, key });
                 return;
             },
         } };
@@ -3067,7 +3067,7 @@ pub const Window = struct {
         self.datas.put(hash, sd) catch |err| switch (err) {
             error.OutOfMemory => {
                 self.gpa.free(sd.data);
-                std.debug.print("dataSet: got {!} for id {x} key {s}\n", .{ err, id, key });
+                log.err("dataSet: got {!} for id {x} key {s}", .{ err, id, key });
                 return;
             },
         };
@@ -4167,19 +4167,19 @@ pub fn dialog(src: std.builtin.SourceLocation, opts: DialogOptions) !void {
 
 pub fn dialogDisplay(id: u32) !void {
     const modal = dvui.dataGet(null, id, "_modal", bool) orelse {
-        std.debug.print("Error: lost data for dialog {x}\n", .{id});
+        log.err("lost data for dialog {x}", .{id});
         dvui.dialogRemove(id);
         return;
     };
 
     const title = dvui.dataGet(null, id, "_title", []const u8) orelse {
-        std.debug.print("Error: lost data for dialog {x}\n", .{id});
+        log.err("lost data for dialog {x}", .{id});
         dvui.dialogRemove(id);
         return;
     };
 
     const message = dvui.dataGet(null, id, "_message", []const u8) orelse {
-        std.debug.print("Error: lost data for dialog {x}\n", .{id});
+        log.err("lost data for dialog {x}", .{id});
         dvui.dialogRemove(id);
         return;
     };
@@ -4322,7 +4322,7 @@ pub fn toast(src: std.builtin.SourceLocation, opts: ToastOptions) !void {
 
 pub fn toastDisplay(id: u32) !void {
     const message = dvui.dataGet(null, id, "_message", []const u8) orelse {
-        std.debug.print("Error: lost message for toast {x}\n", .{id});
+        log.err("lost message for toast {x}", .{id});
         return;
     };
 
@@ -6109,10 +6109,10 @@ pub const ScrollAreaWidget = struct {
         if (self.init_opts.scroll_info) |si| {
             self.si = si;
             if (self.init_opts.vertical != si.vertical) {
-                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.vertical {} ignored because given init_opts.scroll_info.vertical {}\n", .{ self.hbox.wd.id, self.init_opts.vertical, si.vertical });
+                log.debug("ScrollAreaWidget {x} init_opts.vertical {} ignored because given init_opts.scroll_info.vertical {}", .{ self.hbox.wd.id, self.init_opts.vertical, si.vertical });
             }
             if (self.init_opts.horizontal != si.horizontal) {
-                std.debug.print("dvui: ScrollAreaWidget {x} init_opts.horizontal {} ignored because given init_opts.scroll_info.horizontal {}\n", .{ self.hbox.wd.id, self.init_opts.horizontal, si.horizontal });
+                log.debug("ScrollAreaWidget {x} init_opts.horizontal {} ignored because given init_opts.scroll_info.horizontal {}", .{ self.hbox.wd.id, self.init_opts.horizontal, si.horizontal });
             }
         } else if (dataGet(null, self.hbox.data().id, "_scroll_info", ScrollInfo)) |si| {
             self.si_store = si;
@@ -6400,7 +6400,7 @@ pub const ScrollContainerWidget = struct {
             .none => {},
             .auto => {
                 if (expand.horizontal()) {
-                    std.debug.print("dvui: scroll child {x} trying to expand .horizontal but scroll container is .auto horizontally\n", .{id});
+                    log.warn("scroll child {x} trying to expand .horizontal but scroll container is .auto horizontally", .{id});
                     expand = expand.removeHorizontal();
                 }
             },
@@ -6410,7 +6410,7 @@ pub const ScrollContainerWidget = struct {
             .none => {},
             .auto => {
                 if (expand.vertical()) {
-                    std.debug.print("dvui: scroll child {x} trying to expand .vertical but scroll container is .auto vertically\n", .{id});
+                    log.warn("dvui: scroll child {x} trying to expand .vertical but scroll container is .auto vertically", .{id});
                     expand = expand.removeVertical();
                 }
             },
@@ -6885,7 +6885,7 @@ pub fn separator(src: std.builtin.SourceLocation, opts: Options) !void {
 
 pub fn spacer(src: std.builtin.SourceLocation, size: Size, opts: Options) WidgetData {
     if (opts.min_size_content != null) {
-        std.debug.print("warning: spacer options had min_size but is being overwritten\n", .{});
+        log.warn("spacer options had min_size but is being overwritten", .{});
     }
     var wd = WidgetData.init(src, .{}, opts.override(.{ .min_size_content = size }));
     wd.register("Spacer", null) catch {};
@@ -8699,7 +8699,7 @@ pub fn renderText(opts: renderTextOptions) !void {
     if (opts.text.len == 0) return;
 
     if (!std.unicode.utf8ValidateSlice(opts.text)) {
-        std.debug.print("renderText: invalid utf8 for \"{s}\"\n", .{opts.text});
+        log.err("renderText: invalid utf8 for \"{s}\"", .{opts.text});
         return error.InvalidUtf8;
     }
 
@@ -8788,7 +8788,7 @@ pub fn renderText(opts: renderTextOptions) !void {
 
                 const codepoint = @as(u32, @intCast(e.key_ptr.*));
                 FontCacheEntry.intToError(c.FT_Load_Char(fce.face, codepoint, @as(i32, @bitCast(FontCacheEntry.LoadFlags{ .render = true })))) catch |err| {
-                    std.debug.print("renderText: freetype error {!} trying to FT_Load_Char font {s} codepoint {d}\n", .{ err, opts.font.name, codepoint });
+                    log.err("renderText: freetype error {!} trying to FT_Load_Char font {s} codepoint {d}", .{ err, opts.font.name, codepoint });
                     return error.freetypeError;
                 };
 
@@ -8799,7 +8799,7 @@ pub fn renderText(opts: renderTextOptions) !void {
                     var col: i32 = 0;
                     while (col < bitmap.width) : (col += 1) {
                         if (bitmap.buffer == null) {
-                            std.debug.print("renderText: freetype error: bitmap null for font {s} codepoint {d}\n", .{ opts.font.name, codepoint });
+                            log.err("renderText: freetype error: bitmap null for font {s} codepoint {d}", .{ opts.font.name, codepoint });
                             return error.freetypeError;
                         }
                         const src = bitmap.buffer[@as(usize, @intCast(row * bitmap.pitch + col))];
@@ -8839,7 +8839,7 @@ pub fn renderText(opts: renderTextOptions) !void {
     var y: f32 = if (cw.snap_to_pixels) @round(opts.rs.r.y) else opts.rs.r.y;
 
     if (opts.debug) {
-        std.debug.print("renderText x {d} y {d}\n", .{ x, y });
+        log.debug("renderText x {d} y {d}", .{ x, y });
     }
 
     var sel: bool = false;
@@ -8892,7 +8892,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         try vtx.append(v);
 
         if (opts.debug) {
-            std.debug.print("{d} pad {d} minx {d} maxx {d} miny {d} maxy {d} x {d} y {d} ", .{ bytes_seen, pad, gi.minx, gi.maxx, gi.miny, gi.maxy, v.pos.x, v.pos.y });
+            log.debug("{d} pad {d} minx {d} maxx {d} miny {d} maxy {d} x {d} y {d} ", .{ bytes_seen, pad, gi.minx, gi.maxx, gi.miny, gi.maxy, v.pos.x, v.pos.y });
         }
 
         v.pos.x = x + (gi.maxx + pad) * target_fraction;
@@ -8905,7 +8905,7 @@ pub fn renderText(opts: renderTextOptions) !void {
         try vtx.append(v);
 
         if (opts.debug) {
-            std.debug.print("    x {d} y {d}\n", .{ v.pos.x, v.pos.y });
+            log.debug("    x {d} y {d}", .{ v.pos.x, v.pos.y });
         }
 
         v.pos.x = x + (gi.minx - pad) * target_fraction;
@@ -9281,7 +9281,7 @@ pub const WidgetData = struct {
         var bg = self.options.backgroundGet();
         if (self.options.borderGet().nonZero()) {
             if (!bg) {
-                std.debug.print("borderAndBackground: {x} forcing background on to support border\n", .{self.id});
+                log.info("borderAndBackground: {x} forcing background on to support border", .{self.id});
                 bg = true;
             }
             const rs = self.borderRectScale();
@@ -9378,7 +9378,7 @@ pub const WidgetData = struct {
                 // it, which is very annoying because you can't "defer try
                 // widget.deinit()".  Also if we are having memory issues then we
                 // have larger problems than here.
-                std.debug.print("minSizeSetAndRefresh: got {!} when trying to minSizeSet widget {x}\n", .{ err, self.id });
+                log.err("minSizeSetAndRefresh: got {!} when trying to minSizeSet widget {x}", .{ err, self.id });
             },
         };
     }
@@ -9700,7 +9700,7 @@ pub const examples = struct {
 
                         if (callafter) |ca| {
                             const response = dvui.dataGet(null, id, "response", dvui.DialogResponse) orelse {
-                                std.debug.print("Error: no response for dialog {x}\n", .{id});
+                                log.err("no response for dialog {x}", .{id});
                                 return;
                             };
                             try ca(id, response);
@@ -9756,7 +9756,7 @@ pub const examples = struct {
 
         pub fn after(id: u32, response: dvui.DialogResponse) dvui.Error!void {
             _ = id;
-            std.debug.print("You clicked \"{s}\"\n", .{@tagName(response)});
+            log.info("You clicked \"{s}\"", .{@tagName(response)});
         }
     };
 
