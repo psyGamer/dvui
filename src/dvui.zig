@@ -2354,6 +2354,15 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Self) void {
+        var datas_it = self.datas.valueIterator();
+        while (datas_it.next()) |sd| {
+            self.gpa.free(sd.data);
+        }
+        var font_it = self.font_cache.valueIterator();
+        while (font_it.next()) |entry| {
+            entry.glyph_info.deinit();
+        }
+
         self.subwindows.deinit();
         self.min_sizes.deinit();
         self.datas.deinit();
